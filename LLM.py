@@ -3,7 +3,6 @@ import pandas as pd
 # Read the Excel file
 df = pd.read_excel('summaries.xlsx')
 
-# Extract the summaries
 summaries = df['Summary'].tolist()
 import openai
 
@@ -17,10 +16,9 @@ def classify_summary(summary):
     )
     return response.choices[0].text.strip()
 
-# Classify each summary
+
 categories = [classify_summary(summary) for summary in summaries]
-# Add the categories to the DataFrame
+
 df['Category'] = categories
 
-# Write the DataFrame to a new Excel file
 df.to_excel('categorized_summaries.xlsx', index=False)
