@@ -9,19 +9,22 @@ import os
 device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
 
 def load_training_data(file_path):
-    df = pd.read_excel(file_path)  # Assuming it's an Excel file
-    df = df[['summary', 'category']]  # Ensure the correct columns are selected
-    df.dropna(inplace=True)  # Drop any rows with missing data
+    df = pd.read_excel(file_path)
+    df = df[['summary', 'category']]
+    df.dropna(inplace=True)
     return df
+
 def preprocess_data(df):
     label_encoder = LabelEncoder()
     df['label'] = label_encoder.fit_transform(df['category'])
     return df, label_encoder
+
 def train_model(train_data, val_data, tokenizer, label_encoder, model_name='bert-base-uncased'):
     model = BertForSequenceClassification.from_pretrained(model_name, num_labels=len(label_encoder.classes_))
     model = model.to(device)
     train_dataset = Dataset.from_pandas(train_data)
     val_dataset = Dataset.from_pandas(val_data)
+    
     def tokenize_function(example):
         return tokenizer(example['summary'], padding="max_length", truncation=True)
     train_dataset = train_dataset.map(tokenize_function, batched=True)
@@ -47,13 +50,14 @@ def train_model(train_data, val_data, tokenizer, label_encoder, model_name='bert
     model.save_pretrained('./trained_model')
     tokenizer.save_pretrained('./trained_model')
     return model
+
 def classify_summaries(model, tokenizer, input_file, output_file, label_encoder):
-    # Load the new data
     df = pd.read_excel(input_file)
     df['summary'] = df['summary'].fillna('')
     tokenized_data = tokenizer(df['summary'].tolist(), padding=True, truncation=True, max_length=512, return_tensors="pt")
     tokenized_data = {k: v.to(device) for k, v in tokenized_data.items()}
-    model.eval()  # Set model to evaluation mode
+    model.eval()
+   
     with torch.no_grad():
         outputs = model(input_ids=tokenized_data['input_ids'], attention_mask=tokenized_data['attention_mask'])
         predictions = torch.argmax(outputs.logits, dim=-1)
@@ -62,6 +66,7 @@ def classify_summaries(model, tokenizer, input_file, output_file, label_encoder)
     output_df = df[['summary', 'Predicted Category']]
     output_df.to_excel(output_file, index=False)
     print(f"The categorized file has been saved and is available at: {output_file}")
+
 if __name__ == "__main__":
     training_file_path = "/Users/sathishm/Documents/TSM Folder/Training Data/Training data.xlsx"
     new_summaries_file_path = "/Users/sathishm/Documents/TSM Folder/Scrapping Output data/Test_data_output.xlsx"
