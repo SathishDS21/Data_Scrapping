@@ -3,10 +3,26 @@ import requests
 from bs4 import BeautifulSoup
 import nltk
 from nltk.tokenize import sent_tokenize
-import os
+import re
+from tqdm import tqdm  # For progress bar
 
-# Function to extract article content and generate summary
+# Download necessary resources for sentence tokenization
+nltk.download('punkt')
+
+def clean_text(text):
+    """
+    Clean the extracted text by removing unnecessary characters and extra spaces.
+    """
+    # Replace multiple spaces/newlines with a single space
+    text = re.sub(r'\s+', ' ', text)
+    # Remove any unwanted characters, keeping only alphanumerics and basic punctuation
+    text = re.sub(r'[^\w\s.,!?]', '', text)
+    return text.strip()
+
 def get_article_summary(link):
+    """
+    Extract and summarize an article from the provided link.
+    """
     try:
         # Send a GET request to fetch the article
         response = requests.get(link)
@@ -15,18 +31,21 @@ def get_article_summary(link):
         # Parse the content with BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
 
-        # Extract all the text content from the webpage
+        # Extract all text content from <p> tags (or other fallback tags if needed)
         paragraphs = soup.find_all('p')
         text = ' '.join([para.get_text() for para in paragraphs])
 
+        # Clean the extracted text
+        text = clean_text(text)
+
         # If the text is empty, return a message
-        if len(text.strip()) == 0:
+        if not text.strip():
             return "No content found."
 
         # Tokenize the text into sentences
         sentences = sent_tokenize(text)
 
-        # Summarize the content: We will take the first few sentences to form a summary of around 20-40 words.
+        # Summarize the content by selecting the first few sentences (around 20-40 words)
         summary = []
         word_count = 0
         for sentence in sentences:
@@ -44,22 +63,33 @@ def get_article_summary(link):
         # Return error message if any exception occurs
         return f"Error fetching content: {str(e)}"
 
-# Define file paths
-excel_file_path = "/Users/sathishm/Documents/TSM Folder/Scrapping Input data/Test_data_first.xlsx"
-output_file_path = "/Users/sathishm/Documents/TSM Folder/Scrapping Output data/Test_data_output.xlsx"
+# Define file paths for input and output
+input_file_path = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/Scrapping Input data/Test_data_first.xlsx"
+output_file_path = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/Scrapping Output data/Data_syndicate.xlsx"
 
 # Read the Excel file containing the links
-df = pd.read_excel(excel_file_path)
+df = pd.read_excel(input_file_path)
 
-# Check if 'Links' column exists in the Excel file
+# Check if the 'Links' column exists in the Excel file
 if 'Links' not in df.columns:
     raise ValueError("The Excel file does not contain a 'Links' column.")
 
-# Create a new column to store the summaries
-df['summary'] = df['Links'].apply(get_article_summary)
+# Initialize an empty list to store the summaries
+summaries = []
 
-# Save the updated DataFrame with summaries to a new Excel file
-df.to_excel(output_file_path, index=False)
+# Process each link using tqdm for progress display
+for link in tqdm(df['Links'], total=len(df), desc="Processing Articles"):
+    summary = get_article_summary(link)
+    summaries.append(summary)
 
-# Confirmation message
-print(f"Summaries saved to {output_file_path}")
+# Add the summaries to the DataFrame
+df['summary'] = summaries
+
+# Save the DataFrame with summaries to the output Excel file
+try:
+    df.to_excel(output_file_path, index=False)
+    print(f"Summaries saved to {output_file_path}\n")
+except Exception as e:
+    raise ValueError(f"Error saving output Excel file: {e}")
+
+print("Processing complete!")
