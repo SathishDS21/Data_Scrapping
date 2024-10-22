@@ -17,7 +17,7 @@ Datetable =
         "Adjusted Date",
             IF (
                 [Date] = TODAY(),
-                [Date] + TIME(5,0,0), // Add 5 hours for UTC+5
-                [Date]
+                "Today", // Show "Today" if the date is today's date
+                [Date] + TIME(5,0,0) // Otherwise, adjust the time zone
             )
     )
