@@ -1,4 +1,5 @@
 Datetable =
+UNION(
     ADDCOLUMNS(
         CALENDAR(DATE(2024, 10, 14), TODAY()),
         "Year", YEAR([Date]),
@@ -8,23 +9,34 @@ Datetable =
         "Month", FORMAT([Date], "MMM"),
         "Day", DAY([Date]),
         "Slicer Date", 
-            IF(
+            IF (
                 [Date] = TODAY(),
                 "Today",
-                FORMAT([Date], "MM/DD/YYYY")
+                [Date] & ""
             ),
-        // Adjust the date by adding a time difference (example: +5 hours for UTC+5)
         "Adjusted Date",
             IF (
                 [Date] = TODAY(),
-                "Today", // Show "Today" if the date is today's date
-                FORMAT([Date] + TIME(5,0,0), "MM/DD/YYYY") // Otherwise, adjust the time zone and convert to text
+                "Today", 
+                FORMAT([Date] + TIME(5,0,0), "MM/DD/YYYY")
             ),
-        // Sort order column to ensure "Today" appears at the top
-        "SortOrder",
+        "SortOrder", 
             IF (
-                [Date] = TODAY(), 
-                0,  -- Assign 0 to today to make it appear at the top
-                [Date]  -- Use the actual date for other rows
+                [Date] = TODAY(),
+                0, 
+                [Date]
             )
+    ),
+    ROW(
+        "Date", TODAY(),
+        "Year", YEAR(TODAY()),
+        "Quarter No", QUARTER(TODAY()),
+        "Quarter", "Q" & QUARTER(TODAY()),
+        "Month No", MONTH(TODAY()),
+        "Month", FORMAT(TODAY(), "MMM"),
+        "Day", DAY(TODAY()),
+        "Slicer Date", "Today",
+        "Adjusted Date", "Today",
+        "SortOrder", 0
     )
+)
