@@ -1,6 +1,5 @@
-TodayText = "Today: " & FORMAT(TODAY(), "dddd, dd mmmm yyyy")
-LastRefreshIST = 
+LastRefreshFormatted = 
     "Last update: " & 
-    FORMAT(NOW() + TIME(5,30,0), "dddd, dd mmmm yyyy") & 
+    FORMAT(MAX('YourTable'[LastRefreshColumn]) + TIME(5, 30, 0), "dddd, dd mmmm yyyy") & 
     " @ " & 
-    FORMAT(NOW() + TIME(5,30,0), "hh:mm AM/PM")
+    FORMAT(MAX('YourTable'[LastRefreshColumn]) + TIME(5, 30, 0), "hh:mm AM/PM")
