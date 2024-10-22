@@ -1,0 +1,23 @@
+Datetable =
+    ADDCOLUMNS(
+        CALENDAR(DATE(2024, 10, 14), TODAY()),
+        "Year", YEAR([Date]),
+        "Quarter No", QUARTER([Date]),
+        "Quarter", "Q" & QUARTER([Date]),
+        "Month No", MONTH([Date]),
+        "Month", FORMAT([Date], "MMM"),
+        "Day", DAY([Date]),
+        "Slicer Date", 
+            IF(
+                [Date] = TODAY(),
+                "Today",
+                [Date] & ""
+            ),
+        // Adjust the date by adding a time difference (example: +5 hours for UTC+5)
+        "Adjusted Date",
+            IF (
+                [Date] = TODAY(),
+                [Date] + TIME(5,0,0), // Add 5 hours for UTC+5
+                [Date]
+            )
+    )
