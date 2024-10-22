@@ -18,6 +18,6 @@ Datetable =
             IF (
                 [Date] = TODAY(),
                 "Today", // Show "Today" if the date is today's date
-                [Date] + TIME(5,0,0) // Otherwise, adjust the time zone
+                FORMAT([Date] + TIME(5,0,0), "MM/DD/YYYY HH:MM AM/PM") // Otherwise, adjust the time zone and convert to text
             )
     )
