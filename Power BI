@@ -11,7 +11,7 @@ Datetable =
             IF(
                 [Date] = TODAY(),
                 "Today",
-                [Date] & ""
+                FORMAT([Date], "MM/DD/YYYY")
             ),
         // Adjust the date by adding a time difference (example: +5 hours for UTC+5)
         "Adjusted Date",
