@@ -1,2 +1,6 @@
 TodayText = "Today: " & FORMAT(TODAY(), "dddd, dd mmmm yyyy")
-LastRefresh = "Last update: " & FORMAT(NOW(), "dddd, dd mmmm yyyy") & " @ " & FORMAT(NOW(), "hh:mm AM/PM")
+LastRefreshIST = 
+    "Last update: " & 
+    FORMAT(NOW() + TIME(5,30,0), "dddd, dd mmmm yyyy") & 
+    " @ " & 
+    FORMAT(NOW() + TIME(5,30,0), "hh:mm AM/PM")
