@@ -1,42 +1,28 @@
 Datetable =
-UNION(
-    ADDCOLUMNS(
-        CALENDAR(DATE(2024, 10, 14), TODAY()),
-        "Year", YEAR([Date]),
-        "Quarter No", QUARTER([Date]),
-        "Quarter", "Q" & QUARTER([Date]),
-        "Month No", MONTH([Date]),
-        "Month", FORMAT([Date], "MMM"),
-        "Day", DAY([Date]),
-        "Slicer Date", 
-            IF (
-                [Date] = TODAY(),
-                "Today",
-                [Date] & ""
-            ),
-        "Adjusted Date",
-            IF (
-                [Date] = TODAY(),
-                "Today", 
-                FORMAT([Date] + TIME(5,0,0), "MM/DD/YYYY")
-            ),
-        "SortOrder", 
-            IF (
-                [Date] = TODAY(),
-                0, 
-                [Date]
-            )
-    ),
-    ROW(
-        "Date", TODAY(),
-        "Year", YEAR(TODAY()),
-        "Quarter No", QUARTER(TODAY()),
-        "Quarter", "Q" & QUARTER(TODAY()),
-        "Month No", MONTH(TODAY()),
-        "Month", FORMAT(TODAY(), "MMM"),
-        "Day", DAY(TODAY()),
-        "Slicer Date", "Today",
-        "Adjusted Date", "Today",
-        "SortOrder", 0
-    )
+ADDCOLUMNS(
+    CALENDAR(DATE(2024, 10, 14), TODAY()),
+    "Year", YEAR([Date]),
+    "Quarter No", QUARTER([Date]),
+    "Quarter", "Q" & QUARTER([Date]),
+    "Month No", MONTH([Date]),
+    "Month", FORMAT([Date], "MMM"),
+    "Day", DAY([Date]),
+    "Slicer Date", 
+        IF(
+            [Date] = TODAY(),
+            "Today", 
+            [Date] & ""  // Keep other dates as they are
+        ),
+    "Adjusted Date", 
+        IF(
+            [Date] = TODAY(), 
+            "Today", 
+            FORMAT([Date] + TIME(5,0,0), "MM/DD/YYYY")  // Adjust the timezone and format for other dates
+        ),
+    "SortOrder", 
+        IF(
+            [Date] = TODAY(),
+            0,  // Today is prioritized at the top with SortOrder = 0
+            [Date]  // Other dates take their actual date value for sorting
+        )
 )
