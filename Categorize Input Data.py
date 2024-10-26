@@ -1,184 +1,91 @@
-import os
-import pickle
-import pandas as pd
-import numpy as np
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
-from transformers import BertTokenizer, BertForSequenceClassification
-from sklearn.preprocessing import LabelEncoder
-import logging
-import traceback
-from functools import wraps
+import pandas as pd
+from tqdm import tqdm
 
-# Configure logging for complex debugging information
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
-# Set device (CPU or MPS/GPU) dynamically
-def get_device():
-    """Dynamically determine the device (CPU, MPS, GPU) based on availability."""
-    if torch.backends.mps.is_available():
-        logging.info("Using MPS (Apple Silicon).")
-        return torch.device("mps")
-    elif torch.cuda.is_available():
-        logging.info("Using CUDA (GPU).")
-        return torch.device("cuda")
-    else:
-        logging.info("Using CPU.")
-        return torch.device("cpu")
+# Load the Flan-T5-large model and tokenizer
+model_name = "google/flan-t5-large"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
 
-device = get_device()
+# Function to summarize an article based on category
+def summarize_article(article_text, category_prompt):
+    # Create prompt with the category for context
+    prompt = f"Summarize this article related to {category_prompt}: {article_text}"
+
+    # Tokenize the prompt
+    inputs = tokenizer(prompt, return_tensors="pt", max_length=512, truncation=True)
+    # Generate summary
+    summary_ids = model.generate(inputs.input_ids, max_length=150, min_length=15, length_penalty=6.0, num_beams=5,
+                                 early_stopping=True)
+    # Decode the summary
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+
+    return summary
 
 
-# Decorator to handle exceptions and log stack traces
-def exception_handler(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            logging.error(f"Error in function '{func.__name__}': {e}")
-            logging.error(traceback.format_exc())
-            raise e
-
-    return wrapper
+# Function to predict supply chain impact based on content and category
+def call_flan_t5_large(prompt):
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(inputs.input_ids, max_length=200)
+    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    prompt = prompt,
+    return response.strip()
 
 
-@exception_handler
-def load_model_and_tokenizer(model_dir):
-    """Load the pre-trained model and tokenizer from the specified directory with deep validation."""
-    if not os.path.exists(model_dir):
-        logging.error(f"Model directory '{model_dir}' does not exist. Please provide a valid path.")
-        raise FileNotFoundError(f"Model directory '{model_dir}' does not exist.")
 
-    logging.info(f"Loading model from '{model_dir}'...")
-    model = BertForSequenceClassification.from_pretrained(model_dir)
-    tokenizer = BertTokenizer.from_pretrained(model_dir)
-
-    logging.info("Model and tokenizer successfully loaded.")
-    return model.to(device), tokenizer
-
-
-@exception_handler
-def load_data(input_file):
-    """Load the input Excel file containing summaries and validate its content."""
-    if not os.path.exists(input_file):
-        logging.error(f"Input file '{input_file}' does not exist.")
-        raise FileNotFoundError(f"Input file '{input_file}' does not exist.")
-
-    logging.info(f"Loading data from '{input_file}'...")
-    df = pd.read_excel(input_file)
-
-    if 'summary' not in df.columns:
-        logging.error("The 'summary' column is missing from the input file.")
-        raise ValueError("Input file must contain a 'summary' column.")
-
-    df['summary'] = df['summary'].fillna('')  # Handle missing summaries with logging
-    if df['summary'].empty:
-        logging.error("No valid summaries found in the input file.")
-        raise ValueError("No valid summaries found in the input file.")
-
-    logging.info(f"Data from '{input_file}' successfully loaded and validated.")
-    return df
-
-
-@exception_handler
-def tokenize_data(tokenizer, df):
-    """Tokenize the summaries using the pre-trained tokenizer with exception handling."""
-    logging.debug(f"Tokenizing {len(df)} summaries...")
-    tokenized_data = tokenizer(
-        df['summary'].tolist(),
-        padding=True,
-        truncation=True,
-        max_length=512,
-        return_tensors="pt"
+def predict_supply_chain_impact(content, category):
+    prompt = (
+        f"Based on the category '{category}' and the following content, identify the supply chain area affected and explain briefly why.\n\n"
+        f"Content: {content}\n\n"
+        f"Respond with a single sentence describing the affected supply chain area and a reason for impact."
     )
-    logging.debug(f"Tokenization complete. Moving data to device: {device}.")
-    return {k: v.to(device) for k, v in tokenized_data.items()}
+    response = call_flan_t5_large(prompt)
+
+    if ":" in response:
+        impact_area, reason = response.split(":", 1)
+        return impact_area.strip(), reason.strip()[:150]
+    else:
+        return response.strip(), ""
 
 
-@exception_handler
-def infer_categories(model, tokenized_data):
-    """Perform inference to predict class labels and handle exceptions."""
-    logging.debug("Running inference on tokenized summaries...")
-    model.eval()
+# Load the Excel data
+file_path = '/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/LLM data/LLM Output.xlsx'  # Update with your actual file path
+data = pd.read_excel(file_path)
 
-    with torch.no_grad():
-        try:
-            outputs = model(
-                input_ids=tokenized_data['input_ids'],
-                attention_mask=tokenized_data['attention_mask']
-            )
-            predictions = torch.argmax(outputs.logits, dim=-1).cpu().numpy()
-        except Exception as e:
-            logging.error("Error during model inference.")
-            raise RuntimeError(f"Error during model inference: {e}")
+# Initialize an empty list to store summaries
+summarized_data = []
 
-    predictions = np.array(predictions, dtype=int).flatten()  # Ensure it's a 1D numpy array
-    logging.debug(f"Inference complete. Predictions shape: {predictions.shape}, type: {predictions.dtype}")
-    return predictions
+# Process each article in the data
+for index, row in tqdm(data.iterrows(), total=len(data), desc="Summarizing Articles"):
+    category = row['Category']
+    article_text = row['Content']
 
+    # Assign a prompt based on the category
+    if category == "Trade":
+        category_prompt = "Trade, with emphasis on trade policies, market dynamics, and supply chain impacts"
+    elif category == "Natural Disaster":
+        category_prompt = "Natural Disasters, focusing on disaster impacts on infrastructure and supply chains"
+    elif category == "Geopolitics":
+        category_prompt = "Geopolitics, with emphasis on international relations and policy effects on supply chains"
+    elif category == "Transportation":
+        category_prompt = "Transportation, focusing on logistics, shipping disruptions, and supply chain routes"
+    elif category == "Suppliers":
+        category_prompt = "Suppliers, focusing on sourcing, procurement, and vendor management"
+    else:
+        category_prompt = "General topics, with emphasis on any supply chain-related aspects"
 
-@exception_handler
-def validate_predictions(predictions, label_encoder):
-    """Ensure predictions are valid class indices and provide extensive logging."""
-    num_classes = len(label_encoder.classes_)
-    logging.debug(f"Validating predictions against {num_classes} classes...")
+    # Generate summary for the article
+    summary = summarize_article(article_text, category_prompt)
 
-    if predictions.max() >= num_classes or predictions.min() < 0:
-        logging.error(f"Invalid prediction indices: {predictions}.")
-        raise ValueError(f"Prediction values out of range. Valid indices: [0, {num_classes - 1}]")
+    # Append the summary and related info to summarized_data
+    summarized_data.append({
+        'Category': category,
+        'Article': article_text,
+        'Summary': summary
+    })
 
-    logging.debug("Predictions validated successfully.")
-    return predictions
-
-
-@exception_handler
-def classify_summaries(model, tokenizer, input_file, output_file, label_encoder):
-    """Classify summaries and save the categorized output with extensive logging."""
-    df = load_data(input_file)
-    tokenized_data = tokenize_data(tokenizer, df)
-    predictions = infer_categories(model, tokenized_data)
-    predictions = validate_predictions(predictions, label_encoder)
-
-    try:
-        df['Predicted Category'] = label_encoder.inverse_transform(predictions)
-    except ValueError as e:
-        logging.error(f"Error during label encoding: {e}. Assigning 'Unknown' category.")
-        df['Predicted Category'] = 'Unknown'
-
-    df[['summary', 'Predicted Category']].to_excel(output_file, index=False)
-    logging.info(f"Results saved to {output_file}")
-
-
-@exception_handler
-def load_label_encoder(label_encoder_path):
-    """Load the label encoder from a pickle file with additional validation."""
-    if not os.path.exists(label_encoder_path):
-        logging.error(f"Label encoder file '{label_encoder_path}' does not exist.")
-        raise FileNotFoundError(f"Label encoder file '{label_encoder_path}' does not exist.")
-
-    logging.info(f"Loading label encoder from '{label_encoder_path}'...")
-    with open(label_encoder_path, 'rb') as f:
-        label_encoder = pickle.load(f)
-
-    logging.info("Label encoder loaded successfully.")
-    return label_encoder
-
-
-if __name__ == "__main__":
-    # File paths
-    input_file = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/Scrapping Output data/Data_syndicate.xlsx"
-    output_file = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/LLM Output data/Datathon.xlsx"
-    model_dir = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/LLM"
-    label_encoder_path = "/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/LLM/label_encoder.pkl"
-
-    # Load resources
-    label_encoder = load_label_encoder(label_encoder_path)
-    model, tokenizer = load_model_and_tokenizer(model_dir)
-
-    # Perform classification with exception handling
-    try:
-        classify_summaries(model, tokenizer, input_file, output_file, label_encoder)
-    except Exception as e:
-        logging.error(f"Classification failed: {e}")
+# Convert summarized data to a DataFrame and save as a new Excel file
+output_df = pd.DataFrame(summarized_data)
+output_df.to_excel('/Users/sathishm/Documents/TSM Folder/Datathon Stage 2/LLM Data/Final Output.xlsx', index=False)
